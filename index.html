@@ -1,0 +1,7 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Operations KPI Dashboard</title><link rel="stylesheet" href="styles.css"><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script></head><body><main class="shell">
+<header><div><span class="eyebrow">HARROW GREEN</span><h1>Operations KPI Dashboard</h1><p>Unit efficiency, workforce utilisation and revenue performance</p></div><div class="actions"><span id="status">Test mode · no operational data published</span><button id="uploadBtn">Load OPS export</button><input id="file" hidden type="file" accept=".xlsx,.xls,.json"></div></header>
+<section class="filters"><label>Branch<select id="branch"><option>All branches</option></select></label><label>Year<select id="year"><option value="latest">Latest year</option></select></label><label>Month<select id="month"><option value="all">All months</option></select></label><div><small>Last refreshed</small><strong id="refreshed">—</strong></div></section>
+<nav id="tabs"></nav><section id="content"></section>
+<section class="quality"><h2>Refresh checks</h2><div id="checks"></div></section>
+<footer>Only aggregate OPS figures are accepted. Raw customer and job-level rows are not retained.</footer>
+</main><script src="app.js"></script></body></html>
