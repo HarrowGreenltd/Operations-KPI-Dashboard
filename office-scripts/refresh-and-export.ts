@@ -12,6 +12,9 @@ function main(workbook: ExcelScript.Workbook): {schema:number;isTestData:boolean
   const allowedGroups=new Set(['Unit Savings','Monthly Unit Progress','Hours Worked Breakdown','Outlook','Agency vs Permanent','Budget','Gross Profit']);
   const weeklyGroups=new Set(['Unit Savings','Monthly Unit Progress','Hours Worked Breakdown']);
   const refreshedAt=new Date(),updatedAt=refreshedAt.toISOString(),snapshotDate=updatedAt.slice(0,10);
+  const weekEndingDate=new Date(Date.UTC(refreshedAt.getUTCFullYear(),refreshedAt.getUTCMonth(),refreshedAt.getUTCDate()));
+  const daysToSunday=(7-weekEndingDate.getUTCDay())%7;weekEndingDate.setUTCDate(weekEndingDate.getUTCDate()+daysToSunday);
+  const weekEnding=weekEndingDate.toISOString().slice(0,10);
   const output:ExportRow[]=source.filter(r=>allowedGroups.has(String(r.Group))).map(r=>({
     Year:Number(r.Year),Month:Number(r.Month),Branch:String(r.Branch),Group:String(r.Group),Measure:String(r.Measure),
     Value:Number(r.Value),Target:r.Target===''?'':Number(r.Target),Unit:String(r.Unit||'number'),SnapshotDate:snapshotDate,RecordType:'Current',UpdatedAt:updatedAt
@@ -19,7 +22,7 @@ function main(workbook: ExcelScript.Workbook): {schema:number;isTestData:boolean
   if(!output.length)throw new Error('No valid aggregate dashboard rows were produced.');
 
   const latestPeriod=Math.max(...output.map(r=>r.Year*100+r.Month));
-  const snapshot=output.filter(r=>weeklyGroups.has(r.Group)&&r.Year*100+r.Month===latestPeriod).map(r=>({...r,RecordType:'WeeklySnapshot'}));
+  const snapshot=output.filter(r=>weeklyGroups.has(r.Group)&&r.Year*100+r.Month===latestPeriod).map(r=>({...r,SnapshotDate:weekEnding,RecordType:'WeeklySnapshot'}));
   let history=workbook.getTable('OpsDashboardHistory');
   if(!history){
     const sheet=workbook.getWorksheet('Dashboard History')||workbook.addWorksheet('Dashboard History');
@@ -29,8 +32,14 @@ function main(workbook: ExcelScript.Workbook): {schema:number;isTestData:boolean
   const historyHeaders=history.getHeaderRowRange().getTexts()[0];
   const existing=history.getRowCount()?history.getRangeBetweenHeaderAndTotal().getValues().map(values=>Object.fromEntries(historyHeaders.map((h,i)=>[h,values[i]]))):[];
   const key=(r:{[key:string]:unknown})=>[r.SnapshotDate,r.Year,r.Month,r.Branch,r.Group,r.Measure].join('|');
-  const existingKeys=new Set(existing.map(key));
-  const additions=snapshot.filter(r=>!existingKeys.has(key(r))).map(r=>historyHeaders.map(h=>(r as unknown as {[key:string]:string|number})[h]??''));
+  const existingIndexes=new Map(existing.map((r,i)=>[key(r),i]));
+  const historyBody=history.getRowCount()?history.getRangeBetweenHeaderAndTotal():null;
+  const additions:(string|number|boolean)[][]=[];
+  for(const r of snapshot){
+    const values=historyHeaders.map(h=>(r as unknown as {[key:string]:string|number})[h]??'');
+    const index=existingIndexes.get(key(r));
+    if(index===undefined)additions.push(values);else historyBody?.getRow(index).setValues([values]);
+  }
   if(additions.length)history.addRows(-1,additions);
   const cutoff=new Date(refreshedAt);cutoff.setUTCFullYear(cutoff.getUTCFullYear()-2);
   const retained:ExportRow[]=[...existing,...snapshot].filter(r=>String(r.RecordType)==='WeeklySnapshot'&&new Date(`${String(r.SnapshotDate).slice(0,10)}T00:00:00Z`)>=cutoff).map(r=>({
