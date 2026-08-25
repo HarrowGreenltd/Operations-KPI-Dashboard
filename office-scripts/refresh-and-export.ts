@@ -1,4 +1,4 @@
-type ExportRow={Year:number;Month:number;Branch:string;Group:string;Measure:string;Value:number;Target:number|string;Unit:string;SnapshotDate:string;UpdatedAt:string};
+type ExportRow={Year:number;Month:number;Branch:string;Group:string;Measure:string;Value:number;Target:number|string;Unit:string;SnapshotDate:string;RecordType:string;UpdatedAt:string};
 
 function main(workbook: ExcelScript.Workbook): {schema:number;isTestData:boolean;rows:ExportRow[]} {
   workbook.refreshAllDataConnections();
@@ -8,13 +8,34 @@ function main(workbook: ExcelScript.Workbook): {schema:number;isTestData:boolean
   const headers=table.getHeaderRowRange().getTexts()[0];
   const required=['Year','Month','Branch','Group','Measure','Value'];
   for(const name of required)if(!headers.includes(name))throw new Error(`Missing export column: ${name}`);
-  const rows=table.getRangeBetweenHeaderAndTotal().getValues().map(values=>Object.fromEntries(headers.map((h,i)=>[h,values[i]])));
+  const source=table.getRangeBetweenHeaderAndTotal().getValues().map(values=>Object.fromEntries(headers.map((h,i)=>[h,values[i]])));
   const allowedGroups=new Set(['Unit Savings','Monthly Unit Progress','Hours Worked Breakdown','Outlook','Agency vs Permanent','Budget','Gross Profit']);
-  const refreshedAt=new Date(),snapshotDate=refreshedAt.toISOString().slice(0,10);
-  const output:ExportRow[]=rows.filter(r=>allowedGroups.has(String(r.Group))).map(r=>({
+  const weeklyGroups=new Set(['Unit Savings','Monthly Unit Progress','Hours Worked Breakdown']);
+  const refreshedAt=new Date(),updatedAt=refreshedAt.toISOString(),snapshotDate=updatedAt.slice(0,10);
+  const output:ExportRow[]=source.filter(r=>allowedGroups.has(String(r.Group))).map(r=>({
     Year:Number(r.Year),Month:Number(r.Month),Branch:String(r.Branch),Group:String(r.Group),Measure:String(r.Measure),
-    Value:Number(r.Value),Target:r.Target===''?'':Number(r.Target),Unit:String(r.Unit||'number'),SnapshotDate:snapshotDate,UpdatedAt:refreshedAt.toISOString()
+    Value:Number(r.Value),Target:r.Target===''?'':Number(r.Target),Unit:String(r.Unit||'number'),SnapshotDate:snapshotDate,RecordType:'Current',UpdatedAt:updatedAt
   }));
   if(!output.length)throw new Error('No valid aggregate dashboard rows were produced.');
-  return {schema:1,isTestData:false,rows:output};
+
+  const latestPeriod=Math.max(...output.map(r=>r.Year*100+r.Month));
+  const snapshot=output.filter(r=>weeklyGroups.has(r.Group)&&r.Year*100+r.Month===latestPeriod).map(r=>({...r,RecordType:'WeeklySnapshot'}));
+  let history=workbook.getTable('OpsDashboardHistory');
+  if(!history){
+    const sheet=workbook.getWorksheet('Dashboard History')||workbook.addWorksheet('Dashboard History');
+    sheet.getRange('A1:K1').setValues([['Year','Month','Branch','Group','Measure','Value','Target','Unit','SnapshotDate','RecordType','UpdatedAt']]);
+    history=sheet.addTable('A1:K1',true);history.setName('OpsDashboardHistory');
+  }
+  const historyHeaders=history.getHeaderRowRange().getTexts()[0];
+  const existing=history.getRowCount()?history.getRangeBetweenHeaderAndTotal().getValues().map(values=>Object.fromEntries(historyHeaders.map((h,i)=>[h,values[i]]))):[];
+  const key=(r:{[key:string]:unknown})=>[r.SnapshotDate,r.Year,r.Month,r.Branch,r.Group,r.Measure].join('|');
+  const existingKeys=new Set(existing.map(key));
+  const additions=snapshot.filter(r=>!existingKeys.has(key(r))).map(r=>historyHeaders.map(h=>(r as unknown as {[key:string]:string|number})[h]??''));
+  if(additions.length)history.addRows(-1,additions);
+  const cutoff=new Date(refreshedAt);cutoff.setUTCFullYear(cutoff.getUTCFullYear()-2);
+  const retained:ExportRow[]=[...existing,...snapshot].filter(r=>String(r.RecordType)==='WeeklySnapshot'&&new Date(`${String(r.SnapshotDate).slice(0,10)}T00:00:00Z`)>=cutoff).map(r=>({
+    Year:Number(r.Year),Month:Number(r.Month),Branch:String(r.Branch),Group:String(r.Group),Measure:String(r.Measure),Value:Number(r.Value),
+    Target:r.Target===''?'':Number(r.Target),Unit:String(r.Unit||'number'),SnapshotDate:String(r.SnapshotDate).slice(0,10),RecordType:'WeeklySnapshot',UpdatedAt:String(r.UpdatedAt||updatedAt)
+  }));
+  return {schema:2,isTestData:false,rows:[...output,...retained]};
 }
