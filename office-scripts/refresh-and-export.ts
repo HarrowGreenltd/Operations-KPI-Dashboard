@@ -1,4 +1,12 @@
 type ExportRow={Year:number;Month:number;Branch:string;Group:string;Measure:string;Value:number;Target:number|string;Unit:string;SnapshotDate:string;RecordType:string;UpdatedAt:string};
+type CellValue=string|number|boolean;
+type RowRecord={[key:string]:CellValue};
+
+function toRecord(headers:string[],values:CellValue[]):RowRecord{
+  const record:RowRecord={};
+  headers.forEach((header,index)=>{record[header]=values[index]??''});
+  return record;
+}
 
 function main(workbook: ExcelScript.Workbook): {schema:number;isTestData:boolean;rows:ExportRow[]} {
   workbook.refreshAllDataConnections();
@@ -8,7 +16,7 @@ function main(workbook: ExcelScript.Workbook): {schema:number;isTestData:boolean
   const headers=table.getHeaderRowRange().getTexts()[0];
   const required=['Year','Month','Branch','Group','Measure','Value'];
   for(const name of required)if(!headers.includes(name))throw new Error(`Missing export column: ${name}`);
-  const source=table.getRangeBetweenHeaderAndTotal().getValues().map(values=>Object.fromEntries(headers.map((h,i)=>[h,values[i]])));
+  const source:RowRecord[]=table.getRangeBetweenHeaderAndTotal().getValues().map((values:CellValue[])=>toRecord(headers,values));
   const allowedGroups=new Set(['Unit Savings','Monthly Unit Progress','Hours Worked Breakdown','Outlook','Agency vs Permanent','Budget','Gross Profit']);
   const weeklyGroups=new Set(['Unit Savings','Monthly Unit Progress','Hours Worked Breakdown']);
   const refreshedAt=new Date(),updatedAt=refreshedAt.toISOString(),snapshotDate=updatedAt.slice(0,10);
@@ -30,13 +38,13 @@ function main(workbook: ExcelScript.Workbook): {schema:number;isTestData:boolean
     history=sheet.addTable('A1:K1',true);history.setName('OpsDashboardHistory');
   }
   const historyHeaders=history.getHeaderRowRange().getTexts()[0];
-  const existing=history.getRowCount()?history.getRangeBetweenHeaderAndTotal().getValues().map(values=>Object.fromEntries(historyHeaders.map((h,i)=>[h,values[i]]))):[];
-  const key=(r:{[key:string]:unknown})=>[r.SnapshotDate,r.Year,r.Month,r.Branch,r.Group,r.Measure].join('|');
+  const existing:RowRecord[]=history.getRowCount()?history.getRangeBetweenHeaderAndTotal().getValues().map((values:CellValue[])=>toRecord(historyHeaders,values)):[];
+  const key=(r:RowRecord)=>[r.SnapshotDate,r.Year,r.Month,r.Branch,r.Group,r.Measure].join('|');
   const existingIndexes=new Map(existing.map((r,i)=>[key(r),i]));
   const historyBody=history.getRowCount()?history.getRangeBetweenHeaderAndTotal():null;
   const additions:(string|number|boolean)[][]=[];
   for(const r of snapshot){
-    const values=historyHeaders.map(h=>(r as unknown as {[key:string]:string|number})[h]??'');
+    const values:CellValue[]=historyHeaders.map(h=>(r as unknown as RowRecord)[h]??'');
     const index=existingIndexes.get(key(r));
     if(index===undefined)additions.push(values);else historyBody?.getRow(index).setValues([values]);
   }
