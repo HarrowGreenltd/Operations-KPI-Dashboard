@@ -112,7 +112,7 @@ function main(
         `Weekly history rows returned: ${weeklyRows.length}`,
         "Raw customer/job fields exported to GitHub: 0",
         "Gross Profit formula: Revenue - Variable Costs - Fixed Costs",
-        "All Branches* Gross Profit includes consolidated-only finance locations"
+        "All branches is calculated from the selectable branch outputs only"
     ];
 
     if (testMode) {
@@ -450,9 +450,6 @@ function buildFinanceRows(
         }
         if (!APPROVED_FINANCE_CODES.has(code)) unknownCodes.add(code);
 
-        // Every recognised and newly detected code contributes to the consolidated total.
-        addFinanceValues(getAggregate(grouped, aggregateKey(year, month, "All Branches*")), record);
-
         const branch = FINANCE_BRANCHES[code];
         if (branch) addFinanceValues(getAggregate(grouped, aggregateKey(year, month, branch)), record);
     }
@@ -483,7 +480,7 @@ function buildFinanceRows(
     });
 
     for (const code of Array.from(unknownCodes).sort()) {
-        warnings.push(`NEW GEOGRAPHY CODE: ${code}. Included in All Branches* Gross Profit only; review whether it should become selectable.`);
+        warnings.push(`NEW GEOGRAPHY CODE: ${code}. Excluded from the selectable branch totals; review whether it should become selectable.`);
     }
     if (blankGeographyRows) {
         warnings.push(`Finance rows with blank GeographyCode: ${blankGeographyRows}. Excluded pending review.`);
