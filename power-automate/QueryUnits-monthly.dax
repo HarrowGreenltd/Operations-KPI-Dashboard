@@ -1,4 +1,5 @@
 EVALUATE
+VAR MaximumYear = YEAR(TODAY()) + IF(MONTH(TODAY()) = 12, 1, 0)
 VAR Core =
     SUMMARIZECOLUMNS(
         'DataSet'[rc-date],
@@ -12,6 +13,7 @@ VAR Core =
         FILTER(
             ALL('DataSet'[rc-date]),
             'DataSet'[rc-date] >= DATE(2026, 1, 1)
+                && YEAR('DataSet'[rc-date]) <= MaximumYear
         ),
         TREATAS({"Labour", "Vehicle"}, 'DataSet'[rc-type]),
         FILTER(
