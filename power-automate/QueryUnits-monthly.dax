@@ -55,22 +55,24 @@ RETURN
         "Status", 'DataSet'[ch-status],
         "BookedQuantity",
             IF(
-                'DataSet'[rc-date] < TODAY()
-                    && 'DataSet'[ch-status] <> "C"
-                    && 'DataSet'[ch-status] <> "L"
-                    && NOT(ISBLANK('DataSet'[ch-status]))
-                    && (
-                        (
-                            'DataSet'[Inventory.in-costingdefault] = "N"
-                                && 'DataSet'[rc-act] <> 0
-                        )
-                        ||
-                        (
-                            'DataSet'[Inventory.in-costingdefault] = "Y"
-                                && 'DataSet'[rc-act] = 0
-                                && 'DataSet'[ch-status] <> "P"
-                        )
-                    ),
+                (
+                    'DataSet'[rc-date] < TODAY()
+                        && 'DataSet'[ch-status] <> "C"
+                        && 'DataSet'[ch-status] <> "L"
+                        && NOT(ISBLANK('DataSet'[ch-status]))
+                        && 'DataSet'[Inventory.in-costingdefault] = "N"
+                        && 'DataSet'[rc-act] <> 0
+                )
+                ||
+                (
+                    'DataSet'[rc-date] >= TODAY()
+                        && 'DataSet'[ch-status] <> "C"
+                        && 'DataSet'[ch-status] <> "L"
+                        && 'DataSet'[ch-status] <> "P"
+                        && NOT(ISBLANK('DataSet'[ch-status]))
+                        && 'DataSet'[Inventory.in-costingdefault] = "Y"
+                        && 'DataSet'[rc-act] = 0
+                ),
                 [Quantity],
                 0
             ),
