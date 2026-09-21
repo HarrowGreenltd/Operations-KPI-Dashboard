@@ -118,7 +118,7 @@ function main(
         "Raw customer/job fields exported to GitHub: 0",
         "Gross Profit formula: Revenue - Variable Costs - Fixed Costs",
         "Monthly Unit Progress Unit Rate uses the simple average of monthly actual unit rates through the prior month",
-        "Monthly Unit Progress Target Units uses Outlook revenue excluding SL-ST006 divided by the YTD Unit Rate",
+        "Monthly Unit Progress Target Units uses Outlook revenue less prior-month actual SL-ST006 revenue, divided by the YTD Unit Rate",
         "Actual Units Revenue = Unit Rate x Booked Total",
         "All branches is calculated from the selectable branch outputs only"
     ];
@@ -450,11 +450,14 @@ function addFinanceValues(a: Aggregate, record: InputRecord): void {
     addValue(a, "outlookFixed", numberValue(record, "[ForecastFixedCost]"));
     addValue(a, "budgetFixed", numberValue(record, "[BudgetFixedCost]"));
 
-    // The workbook's Unit Rate and Target calculations exclude SL-ST006 revenue.
-    if (textValue(record, "[RevenueType]") !== "SL-ST006") {
+    const revenueType = textValue(record, "[RevenueType]");
+    // The workbook's Unit Rate uses actual revenue excluding SL-ST006.
+    if (revenueType !== "SL-ST006") {
         addValue(a, "unitRateActualRevenue", actualRevenue);
-        addValue(a, "unitRateOutlookRevenue", outlookRevenue);
-        addValue(a, "unitRateBudgetRevenue", budgetRevenue);
+    } else {
+        // The Monthly Unit Progress target removes the prior month's
+        // actual SL-ST006 revenue from the selected month's Outlook revenue.
+        addValue(a, "storageActualRevenue", actualRevenue);
     }
 }
 
@@ -565,8 +568,14 @@ function buildMonthlyUnitFinancialRows(
 
         const bookedTotal = (units.bookedLabour || 0) + (units.bookedVehicle || 0);
         const finance = financeAggregates.get(key);
-        const outlookRevenue = finance ? (finance.unitRateOutlookRevenue || 0) : 0;
-        const targetUnits = outlookRevenue / unitRate;
+        const outlookRevenue = finance ? (finance.outlookRevenue || 0) : 0;
+        const priorKey = month > 1
+            ? aggregateKey(year, month - 1, branch)
+            : aggregateKey(year - 1, 12, branch);
+        const priorFinance = financeAggregates.get(priorKey);
+        const priorStorageActual = priorFinance ? (priorFinance.storageActualRevenue || 0) : 0;
+        const targetRevenue = outlookRevenue - priorStorageActual;
+        const targetUnits = targetRevenue / unitRate;
         const actualUnitsRevenue = unitRate * bookedTotal;
 
         pushRow(rows, year, month, branch, "Monthly Unit Progress", "Target Units", targetUnits, "", "number", updatedAt, snapshotDate);
