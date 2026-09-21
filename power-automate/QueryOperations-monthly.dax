@@ -1,0 +1,101 @@
+EVALUATE
+VAR MinimumDate = DATE(2026, 1, 1)
+VAR Months =
+    DISTINCT(
+        SELECTCOLUMNS(
+            FILTER(
+                ALL('Operations Variance'[dd-date]),
+                'Operations Variance'[dd-date] >= MinimumDate
+            ),
+            "ReportYear", YEAR('Operations Variance'[dd-date]),
+            "ReportMonth", MONTH('Operations Variance'[dd-date])
+        )
+    )
+VAR Branches =
+    SELECTCOLUMNS(
+        FILTER(
+            ALL('Operations Variance'[Branch]),
+            NOT ISBLANK('Operations Variance'[Branch])
+        ),
+        "ReportBranch", 'Operations Variance'[Branch]
+    )
+VAR Grid = CROSSJOIN(Months, Branches)
+VAR Results =
+    GENERATE(
+        Grid,
+        VAR CurrentYear = [ReportYear]
+        VAR CurrentMonth = [ReportMonth]
+        VAR CurrentBranch = [ReportBranch]
+        VAR PeriodFilter =
+            FILTER(
+                ALL('Operations Variance'[dd-date]),
+                YEAR('Operations Variance'[dd-date]) = CurrentYear
+                    && MONTH('Operations Variance'[dd-date]) = CurrentMonth
+            )
+        RETURN
+            ROW(
+                "LabourActual",
+                    CALCULATE(
+                        SUM('Operations Variance'[LA]),
+                        PeriodFilter,
+                        TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
+                    ),
+                "VehicleActual",
+                    CALCULATE(
+                        SUM('Operations Variance'[VA]),
+                        PeriodFilter,
+                        TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
+                    ),
+                "LabourSaving",
+                    CALCULATE(
+                        SUM('Operations Variance'[LP.1]) - SUM('Operations Variance'[LA]),
+                        PeriodFilter,
+                        TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
+                    ),
+                "VehicleSaving",
+                    CALCULATE(
+                        SUM('Operations Variance'[VP.1]) - SUM('Operations Variance'[VA]),
+                        PeriodFilter,
+                        TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
+                    ),
+                "EstimatedHours",
+                    CALCULATE(
+                        'Operations Variance'[HoursE],
+                        PeriodFilter,
+                        TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
+                    ),
+                "ActualHours",
+                    CALCULATE(
+                        'Operations Variance'[HoursA],
+                        PeriodFilter,
+                        TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
+                    ),
+                "PaidHours",
+                    CALCULATE(
+                        'Operations Variance'[Round up Delivered (paying hours)],
+                        PeriodFilter,
+                        TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
+                    )
+            )
+    )
+RETURN
+    FILTER(
+        SELECTCOLUMNS(
+            Results,
+            "Year", [ReportYear],
+            "Month", [ReportMonth],
+            "BranchCode", [ReportBranch],
+            "LabourActual", [LabourActual],
+            "VehicleActual", [VehicleActual],
+            "LabourSaving", [LabourSaving],
+            "VehicleSaving", [VehicleSaving],
+            "EstimatedHours", [EstimatedHours],
+            "ActualHours", [ActualHours],
+            "PaidHours", [PaidHours]
+        ),
+        NOT(
+            ISBLANK([LabourActual])
+                && ISBLANK([VehicleActual])
+                && ISBLANK([ActualHours])
+        )
+    )
