@@ -615,21 +615,30 @@ function updateWeeklyHistory(
     }
 
     const headers = history.getHeaderRowRange().getTexts()[0];
-    const existing: CellRecord[] = history.getRowCount()
-        ? history.getRangeBetweenHeaderAndTotal().getValues().map(values => recordFromValues(headers, values))
-        : [];
+    const body = history.getRowCount() ? history.getRangeBetweenHeaderAndTotal() : null;
+    const existingValues: Primitive[][] = body ? body.getValues() as Primitive[][] : [];
+    const existing: CellRecord[] = existingValues.map(values => recordFromValues(headers, values));
     const indexByKey = new Map<string, number>();
     existing.forEach((record, index) => indexByKey.set(historyKey(record), index));
-    const body = history.getRowCount() ? history.getRangeBetweenHeaderAndTotal() : null;
     const additions: Primitive[][] = [];
+    let historyChanged = false;
 
     for (const row of snapshot) {
         const record = row as unknown as CellRecord;
-        const values = headers.map(header => record[header] === undefined ? "" : record[header]);
+        const values = headers.map(header => record[header] === undefined ? "" : record[header]) as Primitive[];
         const index = indexByKey.get(historyKey(record));
-        if (index === undefined) additions.push(values);
-        else if (body) body.getRow(index).setValues([values]);
+        if (index === undefined) {
+            additions.push(values);
+        } else {
+            existingValues[index] = values;
+            historyChanged = true;
+        }
     }
+
+    // Write existing weekly snapshot updates in one operation instead of one
+    // setValues call per row. This keeps RunScript comfortably below the
+    // Power Automate/Office Scripts HTTP timeout on larger weekly snapshots.
+    if (body && historyChanged) body.setValues(existingValues);
     if (additions.length) history.addRows(-1, additions);
 
     const merged = new Map<string, CellRecord>();
