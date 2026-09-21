@@ -16,7 +16,7 @@ VAR Core =
         TREATAS({"Labour", "Vehicle"}, 'DataSet'[rc-type]),
         FILTER(
             ALL('DataSet'[Removals.r-number]),
-            'DataSet'[Removals.r-number] <> 396809
+            'DataSet'[Removals.r-number] <> "396809"
         ),
         FILTER(
             ALL('Branch - Dimensions'[Location]),
