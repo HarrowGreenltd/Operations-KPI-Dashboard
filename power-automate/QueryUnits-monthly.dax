@@ -1,0 +1,98 @@
+EVALUATE
+VAR MinimumDate = DATE(2026, 1, 1)
+VAR ExcludedLocations = {"AZN", "DAS", "GHO", "OTHER", "QED"}
+VAR ExcludedCostTypes = {
+    "Crew Bus DOffs", "IT Electrician", "IT Technician", "IT Engineer",
+    "IT Server Engineer", "IT Team Leader", "Operations Supervisor",
+    "Project Manager", "Project Manager Life Sciences", "Project Administrator",
+    "Driver (DropOffs)"
+}
+VAR BaseRows =
+    FILTER(
+        ALL('DataSet'),
+        'DataSet'[rc-date] >= MinimumDate
+            && 'DataSet'[rc-type] IN {"Labour", "Vehicle"}
+            && 'DataSet'[Removals.r-number] <> 396809
+            && NOT('DataSet'[rc-cost-type] IN ExcludedCostTypes)
+            && NOT(RELATED('Branch - Dimensions'[Location]) IN ExcludedLocations)
+            && RELATED('Branch - Dimensions'[NCat3Name]) <> "London Logistic City"
+    )
+VAR Months =
+    DISTINCT(
+        SELECTCOLUMNS(
+            BaseRows,
+            "ReportYear", YEAR('DataSet'[rc-date]),
+            "ReportMonth", MONTH('DataSet'[rc-date])
+        )
+    )
+VAR Branches =
+    DISTINCT(
+        SELECTCOLUMNS(
+            FILTER(BaseRows, NOT ISBLANK('DataSet'[Removals.r-brch])),
+            "ReportBranch", 'DataSet'[Removals.r-brch]
+        )
+    )
+VAR UnitTypes =
+    DATATABLE("ReportUnitType", STRING, {{"Labour"}, {"Vehicle"}})
+VAR Grid = CROSSJOIN(Months, Branches, UnitTypes)
+VAR Results =
+    GENERATE(
+        Grid,
+        VAR CurrentYear = [ReportYear]
+        VAR CurrentMonth = [ReportMonth]
+        VAR CurrentBranch = [ReportBranch]
+        VAR CurrentUnitType = [ReportUnitType]
+        VAR MatchingRows =
+            FILTER(
+                BaseRows,
+                YEAR('DataSet'[rc-date]) = CurrentYear
+                    && MONTH('DataSet'[rc-date]) = CurrentMonth
+                    && 'DataSet'[Removals.r-brch] = CurrentBranch
+                    && 'DataSet'[rc-type] = CurrentUnitType
+            )
+        VAR BookedRows =
+            FILTER(
+                MatchingRows,
+                (
+                    'DataSet'[rc-date] <= TODAY() - 1
+                        && NOT('DataSet'[ch-status] IN {"C", "L"})
+                        && NOT ISBLANK('DataSet'[ch-status])
+                        && 'DataSet'[Inventory.in-costingdefault] = "N"
+                        && 'DataSet'[rc-act] <> 0
+                )
+                ||
+                (
+                    'DataSet'[rc-date] >= TODAY()
+                        && NOT('DataSet'[ch-status] IN {"C", "L", "P"})
+                        && NOT ISBLANK('DataSet'[ch-status])
+                        && 'DataSet'[Inventory.in-costingdefault] = "Y"
+                        && 'DataSet'[rc-act] = 0
+                )
+            )
+        VAR PendingRows =
+            FILTER(
+                MatchingRows,
+                'DataSet'[rc-date] >= TODAY()
+                    && 'DataSet'[ch-status] = "P"
+                    && 'DataSet'[Inventory.in-costingdefault] = "Y"
+                    && 'DataSet'[rc-act] = 0
+            )
+        RETURN
+            ROW(
+                "BookedQuantity", SUMX(BookedRows, 'DataSet'[Qty-New]),
+                "PendingQuantity", SUMX(PendingRows, 'DataSet'[Qty-New])
+            )
+    )
+RETURN
+    FILTER(
+        SELECTCOLUMNS(
+            Results,
+            "Year", [ReportYear],
+            "Month", [ReportMonth],
+            "BranchCode", [ReportBranch],
+            "UnitType", [ReportUnitType],
+            "BookedQuantity", [BookedQuantity],
+            "PendingQuantity", [PendingQuantity]
+        ),
+        NOT(ISBLANK([BookedQuantity]) && ISBLANK([PendingQuantity]))
+    )
