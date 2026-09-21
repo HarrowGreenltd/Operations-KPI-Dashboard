@@ -46,7 +46,7 @@ VAR Core =
                 }
             )
         ),
-        "Quantity", SUM('DataSet'[Qty-New])
+        "Quantity", [SumQty_New]
     )
 RETURN
     SELECTCOLUMNS(
