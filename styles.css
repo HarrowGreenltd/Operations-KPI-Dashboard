@@ -17,3 +17,7 @@
 .monthly-detail-grid .table-card{margin-top:0}
 .monthly-detail-grid .compact-table{min-width:560px}
 @media(max-width:900px){.monthly-detail-grid{grid-template-columns:1fr}}
+
+.percent-start td{border-top:14px solid var(--paper)}
+.percent-start td:first-child{position:relative}
+.percent-start td:first-child:before{content:'Percentage measures';position:absolute;left:10px;top:-12px;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--paper);padding:0 6px}
