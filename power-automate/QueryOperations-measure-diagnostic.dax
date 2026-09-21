@@ -1,0 +1,14 @@
+EVALUATE
+SELECTCOLUMNS(
+    FILTER(
+        INFO.VIEW.MEASURES(),
+        [Name] IN {
+            "HoursE",
+            "HoursA",
+            "Round up Delivered (paying hours)"
+        }
+    ),
+    "MeasureName", [Name],
+    "TableName", [Table],
+    "Expression", [Expression]
+)
