@@ -60,19 +60,31 @@ VAR Results =
                     ),
                 "EstimatedHours",
                     CALCULATE(
-                        'Operations Variance'[HoursE],
+                        SUMX(
+                            'Operations Variance',
+                            'Operations Variance'[HrsE]
+                                * ('Operations Variance'[LE] + 'Operations Variance'[VE])
+                        ),
                         PeriodFilter,
                         TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
                     ),
                 "ActualHours",
                     CALCULATE(
-                        'Operations Variance'[HoursA],
+                        SUMX(
+                            'Operations Variance',
+                            'Operations Variance'[HrsA]
+                                * ('Operations Variance'[LA] + 'Operations Variance'[VA])
+                        ),
                         PeriodFilter,
                         TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
                     ),
                 "PaidHours",
                     CALCULATE(
-                        'Operations Variance'[Round up Delivered (paying hours)],
+                        SUMX(
+                            'Operations Variance',
+                            'Operations Variance'[Round Up]
+                                * ('Operations Variance'[LA] + 'Operations Variance'[VA])
+                        ),
                         PeriodFilter,
                         TREATAS({CurrentBranch}, 'Operations Variance'[Branch])
                     )
