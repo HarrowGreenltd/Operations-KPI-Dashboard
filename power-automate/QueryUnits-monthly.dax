@@ -51,6 +51,8 @@ VAR Core =
 RETURN
     SELECTCOLUMNS(
         Core,
+        "Year", YEAR('DataSet'[rc-date]),
+        "Month", MONTH('DataSet'[rc-date]),
         "Date", 'DataSet'[rc-date],
         "BranchCode", 'DataSet'[Removals.r-brch],
         "UnitType", 'DataSet'[rc-type],
