@@ -5,11 +5,6 @@ VAR Core =
         'DataSet'[rc-date],
         'DataSet'[Removals.r-brch],
         'DataSet'[rc-type],
-        'DataSet'[ch-status],
-        'DataSet'[Inventory.in-costingdefault],
-        'DataSet'[rc-act],
-        'Branch - Dimensions'[Location],
-        'Branch - Dimensions'[NCat3Name],
         FILTER(
             ALL('DataSet'[rc-date]),
             'DataSet'[rc-date] >= DATE(2026, 1, 1)
@@ -46,47 +41,64 @@ VAR Core =
                 }
             )
         ),
-        "Quantity", CALCULATE(SUM('DataSet'[Qty-New]))
-    )
-RETURN
-    SELECTCOLUMNS(
-        Core,
-        "Year", YEAR('DataSet'[rc-date]),
-        "Month", MONTH('DataSet'[rc-date]),
-        "Date", 'DataSet'[rc-date],
-        "BranchCode", 'DataSet'[Removals.r-brch],
-        "UnitType", 'DataSet'[rc-type],
-        "Status", 'DataSet'[ch-status],
         "BookedQuantity",
-            IF(
-                (
-                    'DataSet'[rc-date] < TODAY()
-                        && 'DataSet'[ch-status] <> "C"
-                        && 'DataSet'[ch-status] <> "L"
-                        && NOT(ISBLANK('DataSet'[ch-status]))
-                        && 'DataSet'[Inventory.in-costingdefault] = "N"
-                        && 'DataSet'[rc-act] <> 0
+            CALCULATE(
+                SUM('DataSet'[Qty-New]),
+                FILTER(
+                    'DataSet',
+                    (
+                        'DataSet'[rc-date] < TODAY()
+                            && 'DataSet'[ch-status] <> "C"
+                            && 'DataSet'[ch-status] <> "L"
+                            && NOT(ISBLANK('DataSet'[ch-status]))
+                            && 'DataSet'[Inventory.in-costingdefault] = "N"
+                            && 'DataSet'[rc-act] <> 0
+                    )
+                    ||
+                    (
+                        'DataSet'[rc-date] >= TODAY()
+                            && 'DataSet'[ch-status] <> "C"
+                            && 'DataSet'[ch-status] <> "L"
+                            && 'DataSet'[ch-status] <> "P"
+                            && NOT(ISBLANK('DataSet'[ch-status]))
+                            && 'DataSet'[Inventory.in-costingdefault] = "Y"
+                            && 'DataSet'[rc-act] = 0
+                    )
                 )
-                ||
-                (
-                    'DataSet'[rc-date] >= TODAY()
-                        && 'DataSet'[ch-status] <> "C"
-                        && 'DataSet'[ch-status] <> "L"
-                        && 'DataSet'[ch-status] <> "P"
-                        && NOT(ISBLANK('DataSet'[ch-status]))
-                        && 'DataSet'[Inventory.in-costingdefault] = "Y"
-                        && 'DataSet'[rc-act] = 0
-                ),
-                [Quantity],
-                0
             ),
         "PendingQuantity",
-            IF(
-                'DataSet'[rc-date] >= TODAY()
-                    && 'DataSet'[ch-status] = "P"
-                    && 'DataSet'[Inventory.in-costingdefault] = "Y"
-                    && 'DataSet'[rc-act] = 0,
-                [Quantity],
-                0
+            CALCULATE(
+                SUM('DataSet'[Qty-New]),
+                FILTER(
+                    'DataSet',
+                    'DataSet'[rc-date] >= TODAY()
+                        && 'DataSet'[ch-status] = "P"
+                        && 'DataSet'[Inventory.in-costingdefault] = "Y"
+                        && 'DataSet'[rc-act] = 0
+                )
             )
+    )
+VAR Daily =
+    SELECTCOLUMNS(
+        FILTER(
+            Core,
+            COALESCE([BookedQuantity], 0) <> 0
+                || COALESCE([PendingQuantity], 0) <> 0
+        ),
+        "Year", YEAR('DataSet'[rc-date]),
+        "Month", MONTH('DataSet'[rc-date]),
+        "BranchCode", 'DataSet'[Removals.r-brch],
+        "UnitType", 'DataSet'[rc-type],
+        "BookedQuantity", COALESCE([BookedQuantity], 0),
+        "PendingQuantity", COALESCE([PendingQuantity], 0)
+    )
+RETURN
+    GROUPBY(
+        Daily,
+        [Year],
+        [Month],
+        [BranchCode],
+        [UnitType],
+        "BookedQuantity", SUMX(CURRENTGROUP(), [BookedQuantity]),
+        "PendingQuantity", SUMX(CURRENTGROUP(), [PendingQuantity])
     )
